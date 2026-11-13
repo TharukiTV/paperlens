@@ -52,7 +52,11 @@ def parse_pdf(data: bytes) -> ParsedPDF:
     return ParsedPDF(pages=pages, metadata=meta)
 
 
-def read_pages(path) -> list[str]:
-    """Re-read cleaned page text from a stored PDF."""
-    with pymupdf.open(path) as doc:
+def read_pages(source) -> list[str]:
+    """Re-read cleaned page text from a stored PDF (raw bytes or a file path)."""
+    if isinstance(source, (bytes, bytearray)):
+        opened = pymupdf.open(stream=source, filetype="pdf")
+    else:
+        opened = pymupdf.open(source)
+    with opened as doc:
         return [_clean(page.get_text("text", sort=True)) for page in doc]

@@ -77,11 +77,28 @@ def _normalize(m: np.ndarray) -> np.ndarray:
 
 
 class HybridRetriever:
-    def __init__(self, chunks: list[dict], embeddings: np.ndarray | None = None):
+    """BM25 runs in memory over the paper's chunks. Vector search is delegated to `vector_search`
+    (pgvector in production), a callable (query_vector, limit) -> chunk ids in best-first order.
+    Passing a plain `embeddings` matrix instead searches it in memory (handy for tests)."""
+
+    def __init__(self, chunks: list[dict], vector_search=None, embeddings: np.ndarray | None = None):
         self.chunks = chunks
+        self.vector_search = vector_search
         self.embeddings = embeddings
+        self._index_of = {c["id"]: i for i, c in enumerate(chunks)}
         corpus = [tokenize(c["text"]) or ["_"] for c in chunks]
         self.bm25 = BM25Okapi(corpus) if chunks else None
+
+    def _dense_ranking(self, query: str, candidates: int) -> list[int]:
+        if self.vector_search is None and (self.embeddings is None or len(self.embeddings) != len(self.chunks)):
+            return []
+        q_vec = Embedder.embed_query(query)
+        if q_vec is None:
+            return []
+        if self.vector_search is not None:
+            return [self._index_of[cid] for cid in self.vector_search(q_vec, candidates) if cid in self._index_of]
+        sims = self.embeddings @ q_vec
+        return [int(i) for i in np.argsort(-sims)[:candidates]]
 
     def search(self, query: str, k: int = 6, rrf_k: int = 60) -> list[dict]:
         if not self.chunks:
@@ -96,11 +113,9 @@ class HybridRetriever:
             if order:
                 rankings.append(order)
 
-        if self.embeddings is not None and len(self.embeddings) == len(self.chunks):
-            q_vec = Embedder.embed_query(query)
-            if q_vec is not None:
-                sims = self.embeddings @ q_vec
-                rankings.append(list(np.argsort(-sims)[:candidates]))
+        dense = self._dense_ranking(query, candidates)
+        if dense:
+            rankings.append(dense)
 
         if not rankings:  # nothing matched at all: return the opening chunks (title/abstract)
             return [dict(c, score=0.0) for c in self.chunks[:k]]
