@@ -16,3 +16,5 @@ frontend/dist/
 Thumbs.db
 .vscode/
 .idea/
+# Vite cache
+.vite/
