@@ -47,7 +47,7 @@ Each user has their own account and private library.
 ### 1. Clone the repository
 
 ```bash
-git clone https://github.com/<your-username>/paperlens.git
+git clone https://github.com/TharukiTV/paperlens.git
 cd paperlens
 ```
 
