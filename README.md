@@ -15,6 +15,10 @@ Each user has their own account and private library.
   them like `[2]`, shown as page marks that open the PDF at that page.
 - **Hybrid retrieval**: BM25 keyword search plus vector search in Postgres (pgvector), merged
   with Reciprocal Rank Fusion.
+- **Study flashcards**: question-and-answer cards made from the paper, each linked to its page.
+  Flip a card to see the answer, mark it "I knew it" or "Still learning", then review only the
+  ones you're still learning. Keyboard shortcuts: <kbd>Space</kbd> flips, <kbd>←</kbd>/<kbd>→</kbd>
+  move, <kbd>1</kbd>/<kbd>2</kbd> mark the card.
 - **Answer styles**: Standard, Simple (plain-language explanations) and Reviewer (critical
   peer-review tone).
 - **Multi-user**: email and password accounts, server-side sessions in an HttpOnly cookie, and
@@ -114,7 +118,9 @@ Open <http://localhost:5173>. In development, Vite forwards `/api` requests to t
 3. Read the summary. Click a yellow page mark such as `p.3` to open the PDF at that page.
 4. Ask a question in the **Ask the paper** panel, or click one of the suggested questions.
    Hover a page mark in the answer to preview the passage it came from.
-5. To check that users are isolated, sign out, create a second account and confirm the library
+5. Open the **Flashcards** tab to test yourself on the paper. Flip each card, mark it, and at the
+   end review only the cards you're still learning.
+6. To check that users are isolated, sign out, create a second account and confirm the library
    is empty.
 
 ## Running the tests
@@ -129,7 +135,8 @@ python -m pytest
 ```
 
 They cover sign-up and sign-in, session handling, login throttling, user isolation on every paper
-route, upload, chat retrieval and history, summary caching, deletion and retrieval ranking.
+route, upload, chat retrieval and history, summary and flashcard caching, deletion and retrieval
+ranking.
 
 ## Configuration
 
@@ -154,6 +161,7 @@ All settings live in `backend/.env` (see `backend/.env.example`).
 ```
 Upload:   PDF ─► page text ─► chunks (never cross pages) ─► embeddings ─► Postgres
 Summary:  page text with [Page N] markers ─► LLM (JSON) ─► saved on the paper
+Cards:    page text with [Page N] markers ─► LLM (JSON) ─► 12 cards with pages ─► saved on the paper
 Question: question ─► BM25 + pgvector search ─► top 6 passages ─► LLM ─► streamed answer with [n] citations
 ```
 
@@ -173,6 +181,7 @@ paperlens/
 │   │   ├── retriever.py      embeddings and hybrid search
 │   │   ├── qa.py             prompt building and answer streaming
 │   │   ├── summarizer.py     structured summaries
+│   │   ├── flashcards.py     study flashcards
 │   │   ├── llm.py            Gemini / OpenAI client with fallback
 │   │   └── config.py         settings
 │   └── tests/
@@ -193,6 +202,7 @@ paperlens/
 | `GET /api/documents/{id}/file` | The original PDF |
 | `POST /api/documents/{id}/summary` | Generate or fetch the summary (`?regenerate=true` to redo) |
 | `GET /api/documents/{id}/summary.md` | Summary as Markdown |
+| `POST /api/documents/{id}/flashcards` | Generate or fetch the study flashcards (`?regenerate=true` for new ones) |
 | `GET`, `POST`, `DELETE /api/documents/{id}/chat` | Read, ask (Server-Sent Events stream) or clear the chat |
 | `GET /api/health` | Server, database and model status |
 
