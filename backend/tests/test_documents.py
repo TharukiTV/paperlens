@@ -33,6 +33,7 @@ def test_users_cannot_see_each_others_papers(client, make_client, sample_pdf):
         ("get", f"/api/documents/{doc['id']}/chat"),
         ("delete", f"/api/documents/{doc['id']}/chat"),
         ("post", f"/api/documents/{doc['id']}/summary"),
+        ("post", f"/api/documents/{doc['id']}/flashcards"),
         ("delete", f"/api/documents/{doc['id']}"),
     ]:
         assert getattr(bob, method)(path).status_code == 404, (method, path)

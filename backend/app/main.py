@@ -20,6 +20,7 @@ from . import auth, qa, store
 from .chunker import chunk_pages
 from .config import get_settings
 from .db import Document, User, engine, get_db, init_db
+from .flashcards import generate_flashcards
 from .llm import LLMError, model_label
 from .pdf_parser import PDFError, parse_pdf, read_pages
 from .retriever import Embedder
@@ -166,6 +167,26 @@ def export_summary(doc: Document = Depends(owned_document)):
     if not doc.summary:
         raise HTTPException(404, "Generate the summary first.")
     return PlainTextResponse(summary_to_markdown(doc.summary), media_type="text/markdown")
+
+
+# ---------------------------------------------------------------- flashcards
+
+
+@app.post("/api/documents/{doc_id}/flashcards")
+def create_flashcards(regenerate: bool = False, doc: Document = Depends(owned_document),
+                      db: Session = Depends(get_db)):
+    """Generate (or return the saved) study flashcards: question, answer and source page."""
+    if not regenerate and doc.flashcards:
+        return doc.flashcards
+    pages = read_pages(store.get_pdf(db, doc.id))
+    try:
+        deck = generate_flashcards(pages, settings.summary_max_chars)
+    except LLMError as exc:
+        raise HTTPException(502, str(exc)) from exc
+    if not deck["cards"]:
+        raise HTTPException(502, "The model didn't return any flashcards. Try again.")
+    store.update_document(db, doc, flashcards=deck)
+    return deck
 
 
 # ---------------------------------------------------------------- chat
