@@ -60,6 +60,8 @@ cd paperlens
 
 ### 2. Start the database
 
+Open **Docker Desktop** and wait until it says it is running, then:
+
 ```bash
 docker compose up -d
 ```
@@ -81,7 +83,11 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-Create your settings file from the template and add your API key:
+> **Windows PowerShell:** if activating fails with "running scripts is disabled on this system",
+> run `Set-ExecutionPolicy -Scope Process -ExecutionPolicy RemoteSigned` and activate again. This
+> only applies to the current terminal window.
+
+Installing takes a few minutes the first time. Create your settings file from the template and add your API key:
 
 ```bash
 # Windows
@@ -137,6 +143,8 @@ cd backend
 python -m pytest
 ```
 
+(`python -m pytest` also works from the project root.)
+
 They cover sign-up and sign-in, session handling, login throttling, user isolation on every paper
 route, upload, chat retrieval, conversations (separate histories, deletion, privacy and moving
 chats saved before conversations existed), summary and flashcard caching, deletion and retrieval
@@ -150,7 +158,8 @@ All settings live in `backend/.env` (see `backend/.env.example`).
 | --- | --- | --- |
 | `LLM_PROVIDER` | `gemini` | `gemini` or `openai` (any OpenAI-compatible API: OpenAI, Groq, Ollama) |
 | `GEMINI_API_KEY` | | Your Gemini key |
-| `GEMINI_MODEL` | | Main model; `GEMINI_FALLBACK_MODELS` are tried if it's busy |
+| `GEMINI_MODEL` | `gemini-3.5-flash-lite` (in `.env.example`) | Main model; `GEMINI_FALLBACK_MODELS` are tried if it's busy |
+| `LLM_TIMEOUT_SECONDS` | `45` | A model that hasn't answered by then is skipped for the next one |
 | `DATABASE_URL` | `postgresql+psycopg://paperlens:paperlens@localhost:5433/paperlens` | Postgres connection |
 | `SESSION_DAYS` | `30` | How long a sign-in lasts |
 | `COOKIE_SECURE` | `false` | Set to `true` when serving over HTTPS |
