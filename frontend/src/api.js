@@ -44,6 +44,8 @@ export const api = {
   summarize: (id, regenerate = false) =>
     request(`/api/documents/${id}/summary${regenerate ? "?regenerate=true" : ""}`, { method: "POST" }),
   summaryMarkdown: (id) => request(`/api/documents/${id}/summary.md`),
+  flashcards: (id, regenerate = false) =>
+    request(`/api/documents/${id}/flashcards${regenerate ? "?regenerate=true" : ""}`, { method: "POST" }),
   getChat: (id) => request(`/api/documents/${id}/chat`),
   clearChat: (id) => request(`/api/documents/${id}/chat`, { method: "DELETE" }),
   fileUrl: (id, page) => `${BASE}/api/documents/${id}/file${page ? `#page=${page}` : ""}`,
