@@ -15,6 +15,8 @@ class Settings(BaseSettings):
     gemini_api_key: str = ""
     gemini_model: str = "gemini-flash-latest"
     gemini_fallback_models: str = ""  # comma-separated, tried in order if the main model is busy
+    llm_timeout_seconds: int = 45  # give up on a model after this long and try the next one
+
     openai_api_key: str = ""
     openai_base_url: str = ""
     openai_model: str = "gpt-4o-mini"

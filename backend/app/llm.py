@@ -28,6 +28,9 @@ def _friendly_error(exc: Exception, provider: str) -> LLMError:
         msg = f"The {provider} API key was rejected. Check the key in backend/.env and restart the server."
     elif code == 429 or "RESOURCE_EXHAUSTED" in text or "rate limit" in text.lower():
         msg = "The model's rate limit was reached. Wait a minute and try again."
+    
+    elif _timed_out(exc):
+        msg = "The model timed out. Wait a minute and try again."
     elif code in (500, 503) or "UNAVAILABLE" in text:
         msg = "The AI model is busy right now (high demand). Wait a minute and try again."
     elif code == 404 or "not found" in text.lower():
@@ -41,6 +44,9 @@ def _friendly_error(exc: Exception, provider: str) -> LLMError:
 def _status(exc: Exception):
     return getattr(exc, "code", None) or getattr(exc, "status_code", None)
 
+def _timed_out(exc: Exception) -> bool:
+    return "timeout" in type(exc).__name__.lower() or "timed out" in str(exc).lower()
+
 
 BUSY = {429, 500, 503}   # temporary: wait and retry, then try the next model
 MISSING = {404}          # model not available for this key: try the next model
@@ -53,8 +59,11 @@ class GeminiLLM:
         if not api_key:
             raise LLMError("GEMINI_API_KEY is missing. Add it to backend/.env (free key: https://aistudio.google.com/apikey).")
         from google import genai
+        from google.genai import types
 
-        self.client = genai.Client(api_key=api_key)
+        timeout_ms = get_settings().llm_timeout_seconds * 1000
+        self.client = genai.Client(api_key=api_key, http_options=types.HttpOptions(timeout=timeout_ms))
+
         self.models = models          # first = preferred, the rest = fallbacks
         self.last_model = models[0]   # the model that answered most recently
 
@@ -78,6 +87,9 @@ class GeminiLLM:
                         continue
                     if code in BUSY or code in MISSING:
                         log.warning("%s unavailable (%s); trying next model", model, code)
+                        break
+                    if _timed_out(exc):
+                        log.warning("%s timed out; trying next model", model)
                         break
                     raise _friendly_error(exc, self.name) from exc
         raise _friendly_error(last_exc, self.name) from last_exc

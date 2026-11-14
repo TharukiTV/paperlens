@@ -101,6 +101,7 @@ function Workspace({ user, onSignOut }) {
       return;
     }
     refreshDocs();
+    api.flashcards(record.id).catch(() => {}); // made in the background, ready when the tab is opened
     setProcessing({ name: file.name, stage: "summary", error: "", pages: record.pages });
     setSummaryStatus({ state: "loading", error: "" });
     let summary = null;

@@ -5,6 +5,7 @@ answers 404 for papers that belong to someone else.
 """
 import json
 import logging
+import threading
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -34,6 +35,8 @@ settings = get_settings()
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     init_db()
+    # Load the embedding model now (in the background), not on the first upload or question.
+    threading.Thread(target=Embedder.get, daemon=True).start()
     yield
 
 
@@ -171,22 +174,28 @@ def export_summary(doc: Document = Depends(owned_document)):
 
 # ---------------------------------------------------------------- flashcards
 
+_flashcard_locks: dict[str, threading.Lock] = {}
+
 
 @app.post("/api/documents/{doc_id}/flashcards")
 def create_flashcards(regenerate: bool = False, doc: Document = Depends(owned_document),
                       db: Session = Depends(get_db)):
     """Generate (or return the saved) study flashcards: question, answer and source page."""
-    if not regenerate and doc.flashcards:
-        return doc.flashcards
-    pages = read_pages(store.get_pdf(db, doc.id))
-    try:
-        deck = generate_flashcards(pages, settings.summary_max_chars)
-    except LLMError as exc:
-        raise HTTPException(502, str(exc)) from exc
-    if not deck["cards"]:
-        raise HTTPException(502, "The model didn't return any flashcards. Try again.")
-    store.update_document(db, doc, flashcards=deck)
-    return deck
+    # One generation per paper at a time: a second request waits, then gets the saved cards.
+    with _flashcard_locks.setdefault(doc.id, threading.Lock()):
+        db.refresh(doc)  # pick up cards another request saved while we waited
+        if not regenerate and doc.flashcards:
+            return doc.flashcards
+        pages = read_pages(store.get_pdf(db, doc.id))
+        try:
+            deck = generate_flashcards(pages, settings.summary_max_chars)
+        except LLMError as exc:
+            raise HTTPException(502, str(exc)) from exc
+        if not deck["cards"]:
+            raise HTTPException(502, "The model didn't return any flashcards. Try again.")
+        store.update_document(db, doc, flashcards=deck)
+        return deck
+
 
 
 # ---------------------------------------------------------------- chat
