@@ -19,6 +19,9 @@ Each user has their own account and private library.
   Flip a card to see the answer, mark it "I knew it" or "Still learning", then review only the
   ones you're still learning. Keyboard shortcuts: <kbd>Space</kbd> flips, <kbd>←</kbd>/<kbd>→</kbd>
   move, <kbd>1</kbd>/<kbd>2</kbd> mark the card.
+- **Conversation history**: each paper keeps any number of conversations. "New conversation"
+  starts a fresh one without deleting anything; earlier ones can be reopened or deleted (with undo)
+  from the history list.
 - **Answer styles**: Standard, Simple (plain-language explanations) and Reviewer (critical
   peer-review tone).
 - **Multi-user**: email and password accounts, server-side sessions in an HttpOnly cookie, and
@@ -135,7 +138,8 @@ python -m pytest
 ```
 
 They cover sign-up and sign-in, session handling, login throttling, user isolation on every paper
-route, upload, chat retrieval and history, summary and flashcard caching, deletion and retrieval
+route, upload, chat retrieval, conversations (separate histories, deletion, privacy and moving
+chats saved before conversations existed), summary and flashcard caching, deletion and retrieval
 ranking.
 
 ## Configuration
@@ -203,7 +207,9 @@ paperlens/
 | `POST /api/documents/{id}/summary` | Generate or fetch the summary (`?regenerate=true` to redo) |
 | `GET /api/documents/{id}/summary.md` | Summary as Markdown |
 | `POST /api/documents/{id}/flashcards` | Generate or fetch the study flashcards (`?regenerate=true` for new ones) |
-| `GET`, `POST`, `DELETE /api/documents/{id}/chat` | Read, ask (Server-Sent Events stream) or clear the chat |
+| `POST /api/documents/{id}/chat` | Ask a question (Server-Sent Events stream). Send `conversation_id` to continue a conversation; leave it out to start a new one |
+| `GET /api/documents/{id}/conversations` | The paper's conversations, most recent first |
+| `GET`, `DELETE /api/documents/{id}/conversations/{cid}` | One conversation with its messages, or delete it |
 | `GET /api/health` | Server, database and model status |
 
 Every `/api/documents` route requires a signed-in user and returns 404 for papers owned by

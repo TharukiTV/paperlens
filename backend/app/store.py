@@ -8,10 +8,10 @@ import threading
 from collections import OrderedDict
 
 import numpy as np
-from sqlalchemy import delete, func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
-from .db import ChatMessage, Chunk, Document, DocumentFile, SessionLocal
+from .db import ChatMessage, Chunk, Conversation, Document, DocumentFile, SessionLocal, conversation_title
 from .retriever import HybridRetriever
 
 MAX_CHAT_MESSAGES = 100
@@ -119,26 +119,52 @@ def get_retriever(doc_id: str) -> HybridRetriever:
     return retriever
 
 
-# ---------------------------------------------------------------- chat
+# ---------------------------------------------------------------- conversations
+# A paper has many conversations; each holds its own questions and answers.
 
-def get_chat(db: Session, doc_id: str) -> list[dict]:
+def list_conversations(db: Session, doc_id: str) -> list[dict]:
+    # Skip conversations with no saved answer yet (say, the first question failed).
+    has_messages = select(ChatMessage.id).where(ChatMessage.conversation_id == Conversation.id).exists()
+    rows = db.scalars(select(Conversation).where(Conversation.document_id == doc_id, has_messages)
+                      .order_by(Conversation.updated_at.desc()))
+    return [c.to_public() for c in rows]
+
+
+def get_conversation(db: Session, doc_id: str, conv_id: str) -> Conversation:
+    """The conversation, if it belongs to this paper (the caller has checked the paper is the user's)."""
+    conv = db.get(Conversation, conv_id) if conv_id.isalnum() else None
+    if conv is None or conv.document_id != doc_id:
+        raise FileNotFoundError(conv_id)
+    return conv
+
+
+def create_conversation(db: Session, doc_id: str, first_question: str) -> Conversation:
+    conv = Conversation(document_id=doc_id, title=conversation_title(first_question))
+    db.add(conv)
+    db.commit()
+    return conv
+
+
+def delete_conversation(db: Session, conv: Conversation) -> None:
+    db.delete(conv)  # its messages go with it (ON DELETE CASCADE)
+    db.commit()
+
+
+def get_messages(db: Session, conv_id: str) -> list[dict]:
     rows = db.scalars(
-        select(ChatMessage).where(ChatMessage.document_id == doc_id)
+        select(ChatMessage).where(ChatMessage.conversation_id == conv_id)
         .order_by(ChatMessage.id.desc()).limit(MAX_CHAT_MESSAGES)
     ).all()
     return [m.to_public() for m in reversed(rows)]
 
 
-def add_chat_turn(doc_id: str, question: str, answer: str, sources: list[dict], style: str) -> None:
+def add_chat_turn(doc_id: str, conv_id: str, question: str, answer: str, sources: list[dict], style: str) -> None:
     # Called from the streaming response, after the request's own session is gone.
     with SessionLocal() as db:
         db.add_all([
-            ChatMessage(document_id=doc_id, role="user", content=question),
-            ChatMessage(document_id=doc_id, role="assistant", content=answer, sources=sources, style=style),
+            ChatMessage(document_id=doc_id, conversation_id=conv_id, role="user", content=question),
+            ChatMessage(document_id=doc_id, conversation_id=conv_id, role="assistant", content=answer,
+                        sources=sources, style=style),
         ])
+        db.execute(update(Conversation).where(Conversation.id == conv_id).values(updated_at=func.now()))
         db.commit()
-
-
-def clear_chat(db: Session, doc_id: str) -> None:
-    db.execute(delete(ChatMessage).where(ChatMessage.document_id == doc_id))
-    db.commit()

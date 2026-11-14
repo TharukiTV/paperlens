@@ -30,8 +30,7 @@ def test_users_cannot_see_each_others_papers(client, make_client, sample_pdf):
     for method, path in [
         ("get", f"/api/documents/{doc['id']}"),
         ("get", f"/api/documents/{doc['id']}/file"),
-        ("get", f"/api/documents/{doc['id']}/chat"),
-        ("delete", f"/api/documents/{doc['id']}/chat"),
+        ("get", f"/api/documents/{doc['id']}/conversations"),
         ("post", f"/api/documents/{doc['id']}/summary"),
         ("post", f"/api/documents/{doc['id']}/flashcards"),
         ("delete", f"/api/documents/{doc['id']}"),
@@ -59,17 +58,17 @@ def test_chat_retrieves_from_the_paper_and_saves_history(client, sample_pdf, mon
 
     r = client.post(f"/api/documents/{doc['id']}/chat", json={"question": "What word error rate did LiteSpeech reach?"})
     events = [block for block in r.text.split("\n\n") if block]
-    assert events[0].startswith("event: sources")
-    sources = json.loads(events[0].split("data: ", 1)[1])
+    assert events[0].startswith("event: conversation")
+    conv = json.loads(events[0].split("data: ", 1)[1])
+    assert conv["title"] == "What word error rate did LiteSpeech reach?"
+    assert events[1].startswith("event: sources")
+    sources = json.loads(events[1].split("data: ", 1)[1])
     assert sources[0]["page"] == 3  # the results page ranks first
     assert events[-1].startswith("event: done")
 
-    history = client.get(f"/api/documents/{doc['id']}/chat").json()
-    assert [m["role"] for m in history] == ["user", "assistant"]
-    assert history[1]["content"] == "The WER is 18.2% [1]."
-
-    assert client.delete(f"/api/documents/{doc['id']}/chat").status_code == 204
-    assert client.get(f"/api/documents/{doc['id']}/chat").json() == []
+    saved = client.get(f"/api/documents/{doc['id']}/conversations/{conv['id']}").json()
+    assert [m["role"] for m in saved["messages"]] == ["user", "assistant"]
+    assert saved["messages"][1]["content"] == "The WER is 18.2% [1]."
 
 
 def test_summary_is_cached(client, sample_pdf, monkeypatch):

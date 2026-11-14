@@ -204,32 +204,55 @@ def create_flashcards(regenerate: bool = False, doc: Document = Depends(owned_do
 class ChatRequest(BaseModel):
     question: str = Field(min_length=1, max_length=2000)
     style: str = "default"  # default | simple | critical
+    conversation_id: str | None = None  # empty: start a new conversation
 
 
 def _sse(event: str, data) -> str:
     return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
 
 
-@app.get("/api/documents/{doc_id}/chat")
-def get_chat(doc: Document = Depends(owned_document), db: Session = Depends(get_db)):
-    return store.get_chat(db, doc.id)
+def _conversation(doc: Document, conv_id: str, db: Session):
+    try:
+        return store.get_conversation(db, doc.id, conv_id)
+    except FileNotFoundError:
+        raise HTTPException(404, "That conversation doesn't exist. It may have been deleted.")
 
 
-@app.delete("/api/documents/{doc_id}/chat", status_code=204)
-def clear_chat(doc: Document = Depends(owned_document), db: Session = Depends(get_db)):
-    store.clear_chat(db, doc.id)
+@app.get("/api/documents/{doc_id}/conversations")
+def list_conversations(doc: Document = Depends(owned_document), db: Session = Depends(get_db)):
+    """The paper's conversations, most recently used first."""
+    return store.list_conversations(db, doc.id)
+
+
+@app.get("/api/documents/{doc_id}/conversations/{conv_id}")
+def get_conversation(conv_id: str, doc: Document = Depends(owned_document), db: Session = Depends(get_db)):
+    conv = _conversation(doc, conv_id, db)
+    return {**conv.to_public(), "messages": store.get_messages(db, conv.id)}
+
+
+@app.delete("/api/documents/{doc_id}/conversations/{conv_id}", status_code=204)
+def delete_conversation(conv_id: str, doc: Document = Depends(owned_document), db: Session = Depends(get_db)):
+    store.delete_conversation(db, _conversation(doc, conv_id, db))
 
 
 @app.post("/api/documents/{doc_id}/chat")
 def chat(body: ChatRequest, doc: Document = Depends(owned_document), db: Session = Depends(get_db)):
-    """Answer a question with Server-Sent Events: `sources`, then `token`s, then `done` (or `error`)."""
+    """Answer a question with Server-Sent Events: `conversation`, `sources`, then `token`s, then `done`
+    (or `error`). Without a conversation_id, the question starts a new conversation."""
     doc_id = doc.id
-    history = store.get_chat(db, doc_id)
+    if body.conversation_id:
+        conv = _conversation(doc, body.conversation_id, db)
+        history = store.get_messages(db, conv.id)
+    else:
+        conv = store.create_conversation(db, doc_id, body.question)
+        history = []
+    conv_id, conv_public = conv.id, conv.to_public()
     sources = qa.retrieve(doc_id, body.question, history)
     public_sources = [{"n": i, "page": s["page"], "text": s["text"], "score": s["score"]}
                       for i, s in enumerate(sources, start=1)]
 
     def events():
+        yield _sse("conversation", conv_public)
         yield _sse("sources", public_sources)
         answer = ""
         try:
@@ -239,7 +262,7 @@ def chat(body: ChatRequest, doc: Document = Depends(owned_document), db: Session
         except LLMError as exc:
             yield _sse("error", str(exc))
             return
-        store.add_chat_turn(doc_id, body.question, answer, public_sources, body.style)
+        store.add_chat_turn(doc_id, conv_id, body.question, answer, public_sources, body.style)
         yield _sse("done", {"length": len(answer)})
 
     return StreamingResponse(events(), media_type="text/event-stream",

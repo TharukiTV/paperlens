@@ -46,23 +46,26 @@ export const api = {
   summaryMarkdown: (id) => request(`/api/documents/${id}/summary.md`),
   flashcards: (id, regenerate = false) =>
     request(`/api/documents/${id}/flashcards${regenerate ? "?regenerate=true" : ""}`, { method: "POST" }),
-  getChat: (id) => request(`/api/documents/${id}/chat`),
-  clearChat: (id) => request(`/api/documents/${id}/chat`, { method: "DELETE" }),
+  listConversations: (id) => request(`/api/documents/${id}/conversations`),
+  getConversation: (id, convId) => request(`/api/documents/${id}/conversations/${convId}`),
+  deleteConversation: (id, convId, options = {}) =>
+    request(`/api/documents/${id}/conversations/${convId}`, { method: "DELETE", ...options }),
   fileUrl: (id, page) => `${BASE}/api/documents/${id}/file${page ? `#page=${page}` : ""}`,
 };
 
 /**
  * Ask a question and stream the answer over Server-Sent Events.
- * Handlers: onSources(list), onToken(text), onDone(), onError(message).
+ * Handlers: onConversation({id, title}), onSources(list), onToken(text), onDone(), onError(message).
+ * Without a conversationId the question starts a new conversation.
  */
-export async function streamChat(id, question, style, handlers, signal) {
+export async function streamChat(id, question, style, handlers, signal, conversationId = null) {
   let res;
   try {
     res = await fetch(`${BASE}/api/documents/${id}/chat`, {
       method: "POST",
       credentials: "include",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ question, style }),
+      body: JSON.stringify({ question, style, conversation_id: conversationId }),
       signal,
     });
   } catch (err) {
@@ -94,7 +97,8 @@ export async function streamChat(id, question, style, handlers, signal) {
           else if (line.startsWith("data: ")) data += line.slice(6);
         }
         const payload = data ? JSON.parse(data) : null;
-        if (event === "sources") handlers.onSources?.(payload);
+        if (event === "conversation") handlers.onConversation?.(payload);
+        else if (event === "sources") handlers.onSources?.(payload);
         else if (event === "token") handlers.onToken?.(payload);
         else if (event === "done") handlers.onDone?.();
         else if (event === "error") handlers.onError?.(payload);

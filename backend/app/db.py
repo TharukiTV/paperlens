@@ -103,11 +103,28 @@ class Chunk(Base):
     embedding: Mapped[list[float] | None] = mapped_column(Vector(settings.embedding_dim), nullable=True)
 
 
+class Conversation(Base):
+    """One chat thread about a paper. A paper can have many; "New conversation" starts another."""
+    __tablename__ = "conversations"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=_uuid)
+    document_id: Mapped[str] = mapped_column(ForeignKey("documents.id", ondelete="CASCADE"), index=True)
+    title: Mapped[str] = mapped_column(String(200), default="New conversation")  # the first question
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, index=True)
+
+    def to_public(self) -> dict:
+        return {"id": self.id, "title": self.title, "created_at": self.created_at.isoformat(),
+                "updated_at": self.updated_at.isoformat()}
+
+
 class ChatMessage(Base):
     __tablename__ = "chat_messages"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     document_id: Mapped[str] = mapped_column(ForeignKey("documents.id", ondelete="CASCADE"), index=True)
+    conversation_id: Mapped[str | None] = mapped_column(
+        ForeignKey("conversations.id", ondelete="CASCADE"), index=True, nullable=True)
     role: Mapped[str] = mapped_column(String(16))  # "user" | "assistant"
     content: Mapped[str] = mapped_column(Text)
     sources: Mapped[list | None] = mapped_column(JSONB, nullable=True)
@@ -129,6 +146,36 @@ def init_db() -> None:
     # create_all doesn't add columns to tables that already exist, so add later columns here.
     with engine.begin() as conn:
         conn.execute(text("ALTER TABLE documents ADD COLUMN IF NOT EXISTS flashcards JSONB"))
+        conn.execute(text("ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS conversation_id VARCHAR(32) "
+                          "REFERENCES conversations(id) ON DELETE CASCADE"))
+        conn.execute(text("CREATE INDEX IF NOT EXISTS ix_chat_messages_conversation_id ON chat_messages (conversation_id)"))
+    _move_old_chats_into_conversations()
+
+
+def _move_old_chats_into_conversations() -> None:
+    """Chats saved before conversations existed become one conversation per paper, so none are lost."""
+    with engine.begin() as conn:
+        papers = conn.execute(text(
+            "SELECT document_id, MIN(created_at), MAX(created_at) FROM chat_messages "
+            "WHERE conversation_id IS NULL GROUP BY document_id")).all()
+        for doc_id, first_at, last_at in papers:
+            first_question = conn.execute(text(
+                "SELECT content FROM chat_messages WHERE document_id = :d AND conversation_id IS NULL "
+                "AND role = 'user' ORDER BY id LIMIT 1"), {"d": doc_id}).scalar()
+            conv_id = _uuid()
+            conn.execute(text(
+                "INSERT INTO conversations (id, document_id, title, created_at, updated_at) "
+                "VALUES (:id, :d, :title, :first, :last)"),
+                {"id": conv_id, "d": doc_id, "title": conversation_title(first_question or ""),
+                 "first": first_at, "last": last_at})
+            conn.execute(text("UPDATE chat_messages SET conversation_id = :c "
+                              "WHERE document_id = :d AND conversation_id IS NULL"), {"c": conv_id, "d": doc_id})
+
+
+def conversation_title(question: str) -> str:
+    """A conversation is named after its first question, shortened to fit the history list."""
+    title = " ".join(question.split())
+    return (title[:77] + "...") if len(title) > 80 else (title or "New conversation")
 
 
 def get_db():
