@@ -4,6 +4,7 @@ import {
   ExternalLink, Lightbulb, Loader2, MessageSquareText, RefreshCw, Sparkles,
 } from "lucide-react";
 import { api } from "../api";
+import Flashcards from "./Flashcards";
 import Markdown from "./Markdown";
 import PageRef from "./PageRef";
 import { useToast } from "./Toast";
@@ -263,7 +264,8 @@ export default function Reader({ doc, view, setView, pdfPage, onOpenPage, summar
   const s = doc.summary;
   const scrollRef = useRef(null);
   const [progress, setProgress] = useState(0);
-  const tabs = [["summary", "Summary"], ["pdf", "PDF"], ...(chat ? [["chat", "Ask"]] : [])];
+  const [cardsDoc, setCardsDoc] = useState(null); // paper whose flashcards have been opened
+  const tabs = [["summary", "Summary"], ["cards", "Flashcards"], ["pdf", "PDF"], ...(chat ? [["chat", "Ask"]] : [])];
 
   useEffect(() => {
     const el = scrollRef.current;
@@ -278,6 +280,7 @@ export default function Reader({ doc, view, setView, pdfPage, onOpenPage, summar
   }, [view, doc.id]);
 
   useEffect(() => { scrollRef.current?.scrollTo({ top: 0 }); }, [doc.id]);
+  useEffect(() => { if (view === "cards") setCardsDoc(doc.id); }, [view, doc.id]);
 
   return (
     <div className="reader">
@@ -304,6 +307,12 @@ export default function Reader({ doc, view, setView, pdfPage, onOpenPage, summar
       <div className="reader__body" ref={scrollRef}>
         {view === "summary" && (
           <SummaryView doc={doc} status={summaryStatus} onOpenPage={onOpenPage} onRegenerate={onRegenerate} onAsk={onAsk} scrollRef={scrollRef} />
+        )}
+        {/* Kept mounted after the first visit, so checking a page in the PDF doesn't lose your place. */}
+        {cardsDoc === doc.id && (
+          <div className="reader__panel" hidden={view !== "cards"}>
+            <Flashcards key={doc.id} doc={doc} active={view === "cards"} onOpenPage={onOpenPage} onAsk={onAsk} />
+          </div>
         )}
         {view === "pdf" && <PdfView doc={doc} page={pdfPage} onOpenPage={onOpenPage} />}
         {view === "chat" && chat}

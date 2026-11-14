@@ -72,6 +72,7 @@ class Document(Base):
     retrieval: Mapped[str] = mapped_column(String(16))  # "hybrid" | "keyword"
     pdf_metadata: Mapped[dict] = mapped_column(JSONB, default=dict)
     summary: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    flashcards: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, index=True)
 
     def to_public(self) -> dict:
@@ -125,6 +126,9 @@ def init_db() -> None:
     with engine.begin() as conn:
         conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
     Base.metadata.create_all(engine)
+    # create_all doesn't add columns to tables that already exist, so add later columns here.
+    with engine.begin() as conn:
+        conn.execute(text("ALTER TABLE documents ADD COLUMN IF NOT EXISTS flashcards JSONB"))
 
 
 def get_db():
