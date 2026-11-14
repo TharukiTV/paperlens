@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  AlertCircle, ArrowLeft, ArrowRight, Check, Layers, Loader2, MessageSquareText, RefreshCw, RotateCcw, Shuffle, X,
+  AlertCircle, ArrowLeft, ArrowRight, Check, Layers, Loader2, Maximize2, MessageSquareText, Minimize2, RefreshCw, RotateCcw, Shuffle, X,
 } from "lucide-react";
 import { api } from "../api";
 import PageRef from "./PageRef";
@@ -31,7 +31,7 @@ const shuffled = (list) => {
   return out;
 };
 
-export default function Flashcards({ doc, active = true, onOpenPage, onAsk }) {
+export default function Flashcards({ doc, active = true, focused = false, onToggleFocus, onOpenPage, onAsk }) {
   const toast = useToast();
   const [deck, setDeck] = useState(null);
   const [status, setStatus] = useState({ state: "loading", error: "" });
@@ -138,9 +138,17 @@ export default function Flashcards({ doc, active = true, onOpenPage, onAsk }) {
           <span className="flashcards__stat flashcards__stat--learning"><RotateCcw size={14} aria-hidden="true" />{learningIds.length} still learning</span>
           {reviewing && <span className="flashcards__stat">Reviewing {order.length} of {total}</span>}
         </div>
-        <button className="button button--ghost" onClick={() => startRound(shuffled(order))} disabled={order.length < 2}>
-          <Shuffle size={15} aria-hidden="true" />Shuffle
-        </button>
+        <div className="flashcards__tools">
+          <button className="button button--ghost" onClick={() => startRound(shuffled(order))} disabled={order.length < 2}>
+            <Shuffle size={15} aria-hidden="true" />Shuffle
+          </button>
+          {onToggleFocus && (
+            <button className="button button--ghost" onClick={onToggleFocus} aria-pressed={focused} title={focused ? "Exit study mode (Esc)" : "Study mode: cards fill the screen"}>
+              {focused ? <Minimize2 size={15} aria-hidden="true" /> : <Maximize2 size={15} aria-hidden="true" />}
+              {focused ? "Exit" : "Study mode"}
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="flashcards__track" aria-hidden="true">

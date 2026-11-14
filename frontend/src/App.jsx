@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { FileUp, Loader2, Menu, Moon, Sun } from "lucide-react";
+import { FileUp, Loader2, Menu, MessageSquareText, Moon, Sun } from "lucide-react";
 import { api, UNAUTHORIZED } from "./api";
-import { useMediaQuery, useTheme } from "./hooks";
+import { PANEL_LIMITS, useMediaQuery, usePanelLayout, useTheme } from "./hooks";
 import Sidebar from "./components/Sidebar";
 import Welcome from "./components/Welcome";
 import Processing from "./components/Processing";
 import Reader from "./components/Reader";
 import ChatPanel from "./components/ChatPanel";
 import AuthScreen from "./components/AuthScreen";
+import Resizer from "./components/Resizer";
 import { useToast } from "./components/Toast";
 
 const MAX_MB = 25;
@@ -29,7 +30,10 @@ function Workspace({ user, onSignOut }) {
   const [pendingDelete, setPendingDelete] = useState([]); // ids hidden while the undo toast is up
   const [askRequest, setAskRequest] = useState(null);
   const [dragging, setDragging] = useState(false);
-  const narrow = useMediaQuery("(max-width: 1180px)");
+  const narrow = useMediaQuery("(max-width: 1180px)"); // chat moves into the reader as a tab
+  const mobile = useMediaQuery("(max-width: 860px)");  // library becomes a slide-over drawer
+  const { layout, resize, reset, toggleCollapsed, setCollapsed, setChatHidden } = usePanelLayout();
+  const [focus, setFocus] = useState(null); // null | "chat" | "cards": one panel fills the screen
   const [theme, toggleTheme] = useTheme();
   const toast = useToast();
   const deleteTimers = useRef({});
@@ -62,6 +66,7 @@ function Workspace({ user, onSignOut }) {
 
   const openDocument = useCallback(async (id) => {
     setSidebarOpen(false);
+    setCollapsed(true); // fold the library away so the paper gets the room
     setProcessing(null);
     setActiveId(id);
     setView("summary");
@@ -77,7 +82,7 @@ function Workspace({ user, onSignOut }) {
       setSummaryStatus({ state: "error", error: err.message });
       refreshDocs();
     }
-  }, [summarize, refreshDocs]);
+  }, [summarize, refreshDocs, setCollapsed]);
 
   const handleUpload = useCallback(async (file) => {
     setSidebarOpen(false);
@@ -113,19 +118,21 @@ function Workspace({ user, onSignOut }) {
     }
     setProcessing(null);
     setActiveId(record.id);
+    setCollapsed(true);
     setDoc({ ...record, summary, title: summary?.title || record.title });
     setView("summary");
     setPdfPage(1);
     refreshDocs();
     if (summary) toast("Your summary is ready", { tone: "success" });
-  }, [refreshDocs, toast]);
+  }, [refreshDocs, toast, setCollapsed]);
 
   const goHome = useCallback(() => {
+    setCollapsed(false); // back on the home screen, show the library again
     setActiveId(null);
     setDoc(null);
     setProcessing(null);
     setSidebarOpen(false);
-  }, []);
+  }, [setCollapsed]);
 
   // Delete with a short undo window: hide the paper now, delete it on the server after the toast closes.
   const handleDelete = useCallback((d) => {
@@ -166,7 +173,8 @@ function Workspace({ user, onSignOut }) {
   const askPaper = useCallback((text, { send = true, style } = {}) => {
     setAskRequest({ text, send, style, nonce: Date.now() + Math.random() });
     if (narrow) setView("chat");
-  }, [narrow]);
+    else setChatHidden(false); // asking from the reader brings the chat back
+  }, [narrow, setChatHidden]);
 
   // Drop a PDF anywhere in the window to upload it.
   const uploadRef = useRef(handleUpload);
@@ -200,6 +208,30 @@ function Workspace({ user, onSignOut }) {
     };
   }, []);
 
+  // Focus mode: leave it when what it shows goes away, and on Esc.
+  useEffect(() => {
+    if (!focus) return;
+    if (!doc || (focus === "cards" && view !== "cards") || (focus === "chat" && narrow && view !== "chat")) setFocus(null);
+  }, [focus, doc, view, narrow]);
+  useEffect(() => {
+    if (!focus) return undefined;
+    const onKey = (e) => { if (e.key === "Escape" && !e.defaultPrevented) setFocus(null); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [focus]);
+  const toggleFocus = useCallback((kind) => {
+    setFocus((f) => (f === kind ? null : kind));
+    if (kind === "chat" && narrow) setView("chat");
+  }, [narrow]);
+
+  const collapsed = layout.collapsed && !mobile;
+  const chatHidden = layout.chatHidden && !focus;
+  const sidebarWidth = collapsed ? 68 : layout.sidebar;
+  // Keep at least 480px for the paper when the chat is widened.
+  const resizeChat = (w) => resize("chat", Math.min(w, window.innerWidth - sidebarWidth - 480));
+  const layoutStyle = mobile ? undefined : { "--sidebar-w": `${sidebarWidth}px`, "--chat-w": `${layout.chat}px` };
+  const focusClass = focus ? (focus === "chat" && !narrow ? "focus-side" : "focus-main") : "";
+
   const visibleDocs = docs.filter((d) => !pendingDelete.includes(d.id));
   const offline = health?.status === "offline";
 
@@ -211,6 +243,9 @@ function Workspace({ user, onSignOut }) {
       suggestions={doc.summary?.suggested_questions || []}
       request={askRequest}
       onRequestHandled={() => setAskRequest(null)}
+      focused={focus === "chat"}
+      onClose={narrow || focus ? undefined : () => setChatHidden(true)}
+      onToggleFocus={() => toggleFocus("chat")}
     />
   );
 
@@ -229,6 +264,8 @@ function Workspace({ user, onSignOut }) {
         onRegenerate={() => summarize(doc.id, true)}
         onAsk={askPaper}
         chat={narrow ? chat : null}
+        cardsFocused={focus === "cards"}
+        onToggleCardsFocus={() => toggleFocus("cards")}
       />
     );
   } else {
@@ -245,7 +282,7 @@ function Workspace({ user, onSignOut }) {
   }
 
   return (
-    <div className={`app ${doc && !narrow ? "has-chat" : ""}`}>
+    <div className={`app ${doc && !narrow && !chatHidden ? "has-chat" : ""} ${collapsed ? "sidebar-collapsed" : ""} ${focusClass}`} style={layoutStyle}>
       <Sidebar
         docs={visibleDocs}
         activeId={activeId}
@@ -259,8 +296,15 @@ function Workspace({ user, onSignOut }) {
         busy={busy}
         user={user}
         onSignOut={onSignOut}
+        collapsed={collapsed}
+        canCollapse={!mobile}
+        onToggleCollapse={toggleCollapsed}
       />
       <main className="main" id="main">
+        {!mobile && !collapsed && !focus && (
+          <Resizer side="right" label="Library width" width={layout.sidebar} min={PANEL_LIMITS.sidebar.min} max={PANEL_LIMITS.sidebar.max}
+            onResize={(w) => resize("sidebar", w)} onReset={() => reset("sidebar")} />
+        )}
         <button className="menu-button" onClick={() => setSidebarOpen(true)} aria-label="Open library">
           <Menu size={20} />
         </button>
@@ -269,8 +313,22 @@ function Workspace({ user, onSignOut }) {
           {theme === "dark" ? <Sun size={18} /> : <Moon size={18} />}
         </button>
         {main}
+        {doc && !narrow && chatHidden && !focus && (
+          <button className="chat-reopen" onClick={() => setChatHidden(false)} title="Show the chat">
+            <MessageSquareText size={18} aria-hidden="true" />Ask the paper
+          </button>
+        )}
       </main>
-      {doc && !narrow && <aside className="chat-column" aria-label="Ask the paper">{chat}</aside>}
+      {/* Hidden rather than removed when closed, so the conversation (and an answer being written) is kept. */}
+      {doc && !narrow && (
+        <aside className="chat-column" aria-label="Ask the paper" hidden={chatHidden}>
+          {!focus && (
+            <Resizer side="left" label="Chat width" width={layout.chat} min={PANEL_LIMITS.chat.min} max={PANEL_LIMITS.chat.max}
+              onResize={resizeChat} onReset={() => reset("chat")} />
+          )}
+          {chat}
+        </aside>
+      )}
 
       {dragging && !busy && !offline && (
         <div className="drop-overlay" aria-hidden="true">

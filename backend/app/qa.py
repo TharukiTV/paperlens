@@ -12,7 +12,8 @@ Ground rules:
   about the paper's results. You may use general knowledge only to explain a concept the paper uses,
   and say when you do.
 - Cite every factual claim with the excerpt number in square brackets, e.g. [2] or [1][4].
-  Cite only excerpts that actually support the claim.
+  Cite only excerpts that actually support the claim. The paper overview is background only:
+  never cite it, and never write anything other than excerpt numbers inside the brackets.
 - If the excerpts don't contain the answer, say clearly that the paper (or the retrieved parts of it)
   doesn't say, and suggest what the user could ask instead. Never guess numbers.
 - Be concise and well structured. Use Markdown: short paragraphs, bullet lists, and tables for comparisons.

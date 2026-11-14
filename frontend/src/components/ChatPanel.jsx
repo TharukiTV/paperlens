@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { AlertCircle, ArrowDown, ArrowRight, Check, Copy, RotateCcw, SendHorizontal, Sparkles, Square, SquarePen } from "lucide-react";
+import { AlertCircle, ArrowDown, ArrowRight, Check, Copy, Maximize2, Minimize2, PanelRightClose, RotateCcw, SendHorizontal, Sparkles, Square, SquarePen } from "lucide-react";
 import { api, streamChat } from "../api";
 import Markdown from "./Markdown";
 import PageRef from "./PageRef";
@@ -30,7 +30,7 @@ function Sources({ sources, onOpenPage }) {
   );
 }
 
-export default function ChatPanel({ doc, onOpenPage, suggestions, request, onRequestHandled }) {
+export default function ChatPanel({ doc, onOpenPage, suggestions, request, onRequestHandled, focused = false, onToggleFocus, onClose }) {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
   const [style, setStyle] = useState("default");
@@ -153,7 +153,6 @@ export default function ChatPanel({ doc, onOpenPage, suggestions, request, onReq
 
   const asked = new Set(messages.filter((m) => m.role === "user").map((m) => m.content));
   const remaining = suggestions.filter((q) => !asked.has(q)).slice(0, 3);
-  const activeHint = STYLES.find(([k]) => k === style)[2];
 
   return (
     <div className="chat">
@@ -162,11 +161,24 @@ export default function ChatPanel({ doc, onOpenPage, suggestions, request, onReq
           <h2>Ask the paper</h2>
           <p>Answers cite the pages they use</p>
         </div>
-        {messages.length > 0 && (
-          <button className="icon-button" onClick={clear} aria-label="Start a new conversation" title="New conversation">
-            <SquarePen size={17} />
-          </button>
-        )}
+        <div className="chat__head-tools">
+          {messages.length > 0 && (
+            <button className="icon-button" onClick={clear} aria-label="Start a new conversation" title="New conversation">
+              <SquarePen size={17} />
+            </button>
+          )}
+          {onToggleFocus && (
+            <button className="icon-button" onClick={onToggleFocus} aria-pressed={focused}
+              aria-label={focused ? "Exit full screen chat" : "Full screen chat"} title={focused ? "Exit full screen (Esc)" : "Full screen"}>
+              {focused ? <Minimize2 size={17} /> : <Maximize2 size={17} />}
+            </button>
+          )}
+          {onClose && (
+            <button className="icon-button" onClick={onClose} aria-label="Hide the chat" title="Hide the chat">
+              <PanelRightClose size={17} />
+            </button>
+          )}
+        </div>
       </header>
 
       <div className="chat__log" ref={logRef} onScroll={onScroll} aria-live="polite">
@@ -228,32 +240,24 @@ export default function ChatPanel({ doc, onOpenPage, suggestions, request, onReq
         ))}
       </div>
 
-      {!atBottom && (
-        <button className="jump-latest" onClick={() => setAtBottom(true)}>
-          <ArrowDown size={14} aria-hidden="true" />Latest
-        </button>
-      )}
-
       <form className="composer" onSubmit={(e) => { e.preventDefault(); ask(input); }}>
-        {messages.length > 0 && remaining.length > 0 && !busy && (
+        {!atBottom && (
+          <button type="button" className="jump-latest" onClick={() => setAtBottom(true)}>
+            <ArrowDown size={14} aria-hidden="true" />Latest
+          </button>
+        )}
+        {messages.length > 0 && remaining.length > 0 && !busy && !input && (
           <div className="followups" aria-label="Suggested follow-ups">
             {remaining.map((q) => <button key={q} type="button" className="followup" onClick={() => ask(q)}>{q}</button>)}
           </div>
         )}
         <div className="composer__box">
-          <div className="segmented" role="radiogroup" aria-label="Answer style">
-            {STYLES.map(([key, label, hint]) => (
-              <button key={key} type="button" role="radio" aria-checked={style === key} title={hint}
-                className={`segmented__option ${style === key ? "is-active" : ""}`} onClick={() => setStyle(key)}>
-                {label}
-              </button>
-            ))}
-          </div>
           <label htmlFor="question" className="visually-hidden">Your question</label>
           <textarea
             id="question"
             ref={inputRef}
-            rows={2}
+            rows={1}
+            title="Enter to send, Shift + Enter for a new line, / to jump here"
             value={input}
             placeholder="Ask about methods, results, or limitations…"
             onChange={(e) => setInput(e.target.value)}
@@ -262,7 +266,14 @@ export default function ChatPanel({ doc, onOpenPage, suggestions, request, onReq
             }}
           />
           <div className="composer__foot">
-            <span className="composer__hint">{activeHint}</span>
+            <div className="style-pills" role="radiogroup" aria-label="Answer style">
+              {STYLES.map(([key, label, hint]) => (
+                <button key={key} type="button" role="radio" aria-checked={style === key} title={hint}
+                  className={`style-pill ${style === key ? "is-active" : ""}`} onClick={() => setStyle(key)}>
+                  {label}
+                </button>
+              ))}
+            </div>
             {busy ? (
               <button type="button" className="send-button is-stop" onClick={() => abortRef.current?.abort()} aria-label="Stop answering" title="Stop">
                 <Square size={14} fill="currentColor" />
@@ -274,7 +285,6 @@ export default function ChatPanel({ doc, onOpenPage, suggestions, request, onReq
             )}
           </div>
         </div>
-        <p className="composer__keys"><kbd>Enter</kbd> to send · <kbd>Shift</kbd>+<kbd>Enter</kbd> for a new line · <kbd>/</kbd> to focus</p>
       </form>
     </div>
   );

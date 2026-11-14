@@ -4,9 +4,19 @@ import PageRef from "./PageRef";
 
 // Turn "[3]" citations into links we can render as page marks. Skip real links like [3](url).
 const CITE = /\[(\d{1,2})\](?!\()/g;
+// Models sometimes write "[2, 5]", "[Overview, 2]" or "[Overview]". Keep only the excerpt numbers.
+const LOOSE_CITE = /\s?\[((?:overview|excerpt\s*\d{0,2}|\d{1,2})(?:\s*[,;]\s*(?:overview|excerpt\s*\d{0,2}|\d{1,2}))*)\](?!\()/gi;
+
+function tidyCitations(text) {
+  return text.replace(LOOSE_CITE, (match, inner) => {
+    const numbers = inner.match(/\d{1,2}/g) || [];
+    if (!numbers.length) return "";
+    return `${match.startsWith(" ") ? " " : ""}${numbers.map((n) => `[${n}]`).join("")}`;
+  });
+}
 
 export default function Markdown({ text, sources = [], onOpenPage }) {
-  const prepared = sources.length ? text.replace(CITE, (m, n) => `[${n}](#cite-${n})`) : text;
+  const prepared = sources.length ? tidyCitations(text).replace(CITE, (m, n) => `[${n}](#cite-${n})`) : text;
   return (
     <div className="prose">
       <ReactMarkdown

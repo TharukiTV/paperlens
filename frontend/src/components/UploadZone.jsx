@@ -2,7 +2,7 @@ import { useRef } from "react";
 import { FileUp, Plus } from "lucide-react";
 
 // Dropping files is handled once for the whole window in App.jsx; `dragging` only styles the zone.
-export default function UploadZone({ onUpload, large = false, disabled = false, dragging = false }) {
+export default function UploadZone({ onUpload, large = false, compact = false, disabled = false, dragging = false }) {
   const input = useRef(null);
 
   const pick = (files) => {
@@ -18,6 +18,18 @@ export default function UploadZone({ onUpload, large = false, disabled = false, 
       onChange={(e) => { pick(e.target.files); e.target.value = ""; }}
     />
   );
+
+  if (compact) {
+    return (
+      <>
+        {fileInput}
+        <button type="button" className="rail__upload" disabled={disabled} onClick={() => input.current?.click()}
+          aria-label="Upload a paper" title="Upload a paper">
+          <Plus size={20} aria-hidden="true" />
+        </button>
+      </>
+    );
+  }
 
   if (!large) {
     return (

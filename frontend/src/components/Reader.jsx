@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import {
   AlertCircle, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronsUpDown, Copy, Download,
-  ExternalLink, Lightbulb, Loader2, MessageSquareText, RefreshCw, Sparkles,
+  ExternalLink, Lightbulb, ListTree, Loader2, MessageSquareText, RefreshCw, Sparkles,
 } from "lucide-react";
 import { api } from "../api";
 import Flashcards from "./Flashcards";
@@ -95,6 +95,7 @@ function SummaryView({ doc, status, onOpenPage, onRegenerate, onAsk, scrollRef }
   const articleRef = useRef(null);
   const [collapsed, setCollapsed] = useState({});
   const [active, setActive] = useState(null);
+  const jumpLock = useRef(0);
 
   const present = s ? SECTIONS.filter(([key]) => s.sections?.[key]?.content) : [];
   const presentKeys = present.map(([k]) => k).join(",");
@@ -103,9 +104,13 @@ function SummaryView({ doc, status, onOpenPage, onRegenerate, onAsk, scrollRef }
   useEffect(() => {
     const root = scrollRef.current;
     if (!root || !presentKeys) return;
+    const keys = presentKeys.split(",");
+    const visible = new Set();
     const obs = new IntersectionObserver((entries) => {
-      const top = entries.filter((e) => e.isIntersecting).sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)[0];
-      if (top) setActive(top.target.dataset.key);
+      entries.forEach((e) => (e.isIntersecting ? visible.add(e.target.dataset.key) : visible.delete(e.target.dataset.key)));
+      if (Date.now() < jumpLock.current) return; // a clicked section keeps the highlight while scrolling to it
+      const first = keys.find((k) => visible.has(k)); // the highest section in the reading band
+      if (first) setActive(first);
     }, { root, rootMargin: "-90px 0px -55% 0px" });
     presentKeys.split(",").forEach((k) => {
       const el = document.getElementById(`sec-${k}`);
@@ -127,6 +132,8 @@ function SummaryView({ doc, status, onOpenPage, onRegenerate, onAsk, scrollRef }
   const allCollapsed = present.length > 0 && present.every(([k]) => collapsed[k]);
   const toggleAll = () => setCollapsed(allCollapsed ? {} : Object.fromEntries(present.map(([k]) => [k, true])));
   const jump = (key) => {
+    setActive(key);
+    jumpLock.current = Date.now() + 1000;
     setCollapsed((c) => ({ ...c, [key]: false }));
     requestAnimationFrame(() => document.getElementById(`sec-${key}`)?.scrollIntoView({ behavior: "smooth", block: "start" }));
   };
@@ -144,20 +151,45 @@ function SummaryView({ doc, status, onOpenPage, onRegenerate, onAsk, scrollRef }
     toast("Summary downloaded", { tone: "success" });
   };
 
+  const short = (label) => label.replace(" and future work", "");
+  const current = active || present[0]?.[0] || "";
+  const collapseButton = (
+    <button className="outline__toggle" onClick={toggleAll}>
+      <ChevronsUpDown size={14} aria-hidden="true" />{allCollapsed ? "Expand all" : "Collapse all"}
+    </button>
+  );
+
   return (
-    <>
-      <nav className="outline" aria-label="Summary sections">
-        <div className="outline__chips">
+    <div className="summary-layout">
+      {/* Wide reading area: a contents list beside the summary that stays in view while scrolling. */}
+      <nav className="toc" aria-label="Summary sections">
+        <p className="toc__title">On this page</p>
+        <ol className="toc__list">
           {present.map(([key, label]) => (
-            <button key={key} className={`outline__chip ${active === key ? "is-active" : ""}`} onClick={() => jump(key)}>
-              {label.replace(" and future work", "")}
-            </button>
+            <li key={key}>
+              <button className={`toc__link ${current === key ? "is-active" : ""}`} onClick={() => jump(key)}
+                aria-current={current === key ? "true" : undefined}>
+                {short(label)}
+              </button>
+            </li>
           ))}
-        </div>
-        <button className="outline__toggle" onClick={toggleAll}>
-          <ChevronsUpDown size={14} aria-hidden="true" />{allCollapsed ? "Expand all" : "Collapse all"}
-        </button>
+        </ol>
+        {collapseButton}
       </nav>
+
+      <div className="summary-main">
+        {/* Narrow reading area: one compact "jump to" menu instead. */}
+        <div className="jumpbar">
+          <label className="jumpbar__select">
+            <span className="visually-hidden">Jump to section</span>
+            <ListTree size={15} aria-hidden="true" />
+            <select value={current} onChange={(e) => jump(e.target.value)}>
+              {present.map(([key, label]) => <option key={key} value={key}>{short(label)}</option>)}
+            </select>
+            <ChevronDown size={15} aria-hidden="true" className="jumpbar__chev" />
+          </label>
+          {collapseButton}
+        </div>
 
       <article className="summary" ref={articleRef}>
         {status.state === "error" && <p className="notice notice--error" role="alert"><AlertCircle size={16} aria-hidden="true" />{status.error}</p>}
@@ -228,9 +260,10 @@ function SummaryView({ doc, status, onOpenPage, onRegenerate, onAsk, scrollRef }
           </div>
         </footer>
       </article>
+      </div>
 
       <SelectionToolbar containerRef={articleRef} scrollRef={scrollRef} onAsk={onAsk} />
-    </>
+    </div>
   );
 }
 
@@ -260,10 +293,11 @@ function PdfView({ doc, page, onOpenPage }) {
   );
 }
 
-export default function Reader({ doc, view, setView, pdfPage, onOpenPage, summaryStatus, onRegenerate, onAsk, chat }) {
+export default function Reader({ doc, view, setView, pdfPage, onOpenPage, summaryStatus, onRegenerate, onAsk, chat, cardsFocused, onToggleCardsFocus }) {
   const s = doc.summary;
   const scrollRef = useRef(null);
   const [progress, setProgress] = useState(0);
+  const [compact, setCompact] = useState(false); // header shrinks to one line while reading
   const [cardsDoc, setCardsDoc] = useState(null); // paper whose flashcards have been opened
   const tabs = [["summary", "Summary"], ["cards", "Flashcards"], ["pdf", "PDF"], ...(chat ? [["chat", "Ask"]] : [])];
 
@@ -273,6 +307,8 @@ export default function Reader({ doc, view, setView, pdfPage, onOpenPage, summar
     const onScroll = () => {
       const max = el.scrollHeight - el.clientHeight;
       setProgress(max > 0 ? Math.min(1, el.scrollTop / max) : 0);
+      // Different thresholds for shrinking and growing, so the header doesn't flicker at the edge.
+      setCompact((c) => (c ? el.scrollTop > 8 : el.scrollTop > 80 && max > 240));
     };
     onScroll();
     el.addEventListener("scroll", onScroll, { passive: true });
@@ -284,8 +320,8 @@ export default function Reader({ doc, view, setView, pdfPage, onOpenPage, summar
 
   return (
     <div className="reader">
-      <header className="reader__head">
-        <h1 className="reader__title">{s?.title || doc.title}</h1>
+      <header className={`reader__head ${compact ? "is-compact" : ""}`}>
+        <h1 className="reader__title" title={compact ? s?.title || doc.title : undefined}>{s?.title || doc.title}</h1>
         {s?.authors?.length > 0 && <p className="reader__authors">{s.authors.join(", ")}</p>}
         <p className="reader__meta">
           <span>{doc.filename}</span>
@@ -311,7 +347,8 @@ export default function Reader({ doc, view, setView, pdfPage, onOpenPage, summar
         {/* Kept mounted after the first visit, so checking a page in the PDF doesn't lose your place. */}
         {cardsDoc === doc.id && (
           <div className="reader__panel" hidden={view !== "cards"}>
-            <Flashcards key={doc.id} doc={doc} active={view === "cards"} onOpenPage={onOpenPage} onAsk={onAsk} />
+            <Flashcards key={doc.id} doc={doc} active={view === "cards"} focused={cardsFocused}
+              onToggleFocus={onToggleCardsFocus} onOpenPage={onOpenPage} onAsk={onAsk} />
           </div>
         )}
         {view === "pdf" && <PdfView doc={doc} page={pdfPage} onOpenPage={onOpenPage} />}
