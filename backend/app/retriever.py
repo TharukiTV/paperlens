@@ -7,6 +7,7 @@ having to tune score scales. If the embedding model can't load, retrieval falls 
 import logging
 import re
 import threading
+import time
 
 import numpy as np
 from rank_bm25 import BM25Okapi
@@ -44,8 +45,13 @@ class Embedder:
                     try:
                         from fastembed import TextEmbedding
 
-                        log.info("Loading embedding model %s ...", settings.embedding_model)
-                        cls._model = TextEmbedding(settings.embedding_model)
+                        # Keep the model in backend/data/models, not the Windows Temp folder, so it is
+                        # downloaded once per computer and isn't lost when Temp is cleaned.
+                        cache = settings.data_path / "models"
+                        log.info("Loading embedding model %s from %s ...", settings.embedding_model, cache)
+                        started = time.perf_counter()
+                        cls._model = TextEmbedding(settings.embedding_model, cache_dir=str(cache))
+                        log.info("Embedding model ready in %.1f s", time.perf_counter() - started)
                     except Exception:  # network, disk, unsupported platform
                         log.exception("Embedding model unavailable; using keyword search only.")
                         cls._failed = True
@@ -60,7 +66,9 @@ class Embedder:
         model = cls.get()
         if model is None or not texts:
             return None
+        started = time.perf_counter()
         vectors = np.array(list(model.passage_embed(texts)), dtype=np.float32)
+        log.info("Embedded %d chunks in %.1f s", len(texts), time.perf_counter() - started)
         return _normalize(vectors)
 
     @classmethod

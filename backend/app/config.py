@@ -13,8 +13,8 @@ class Settings(BaseSettings):
     llm_provider: str = "gemini"  # "gemini" | "openai"
 
     gemini_api_key: str = ""
-    gemini_model: str = "gemini-flash-latest"
-    gemini_fallback_models: str = ""  # comma-separated, tried in order if the main model is busy
+    gemini_model: str = "gemini-3.5-flash-lite"
+    gemini_fallback_models: str = "gemini-3.5-flash"  # comma-separated, tried in order if the main model is busy
     llm_timeout_seconds: int = 45  # give up on a model after this long and try the next one
 
     openai_api_key: str = ""

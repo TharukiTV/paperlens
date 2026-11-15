@@ -160,6 +160,10 @@ uvicorn app.main:app --reload
 The API runs at <http://localhost:8000>. Interactive API docs are at <http://localhost:8000/docs>.
 The database tables are created automatically on first start.
 
+On the first start, the backend also downloads the embedding model (about 130 MB) into
+`backend/data/models`. Wait for `Embedding model ready` in the terminal before uploading. Later
+starts load the model from that folder in a couple of seconds.
+
 ### 4. Set up the frontend (terminal 2)
 
 ```bash
