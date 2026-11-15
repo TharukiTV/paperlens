@@ -1,55 +1,108 @@
 # PaperLens
 
 A research assistant for PDFs. Upload a research paper and PaperLens writes a structured summary
-(problem, method, results, limitations) with page references, then answers your questions about
-the paper. Every answer cites the page it came from.
+(problem, method, results, conclusion, limitations) with page references. You can then ask
+questions about the paper, and every answer cites the page it came from.
 
-Each user has their own account and private library.
+![PaperLens: a paper's structured summary with page references, and the chat panel beside it](docs/screenshots/summary.png)
+
+**Contents:** [Features](#features) · [Screenshots](#screenshots) · [Tech stack](#tech-stack) ·
+[Prerequisites](#prerequisites) · [Setup](#setup) · [How to use](#how-to-use) ·
+[AI tools used](#ai-tools-used) · [Tests](#running-the-tests) · [How it works](#how-it-works) ·
+[Configuration](#configuration) · [Known limitations](#known-limitations)
 
 ## Features
 
-- **Structured summaries**: abstract, problem statement, methodology, key results, conclusion and
-  limitations, each linked to the pages it was drawn from. Long papers are summarised in parts
-  (map-reduce).
-- **Cited Q&A (RAG)**: answers are generated only from passages retrieved from the paper and cite
-  them like `[2]`, shown as page marks that open the PDF at that page.
-- **Hybrid retrieval**: BM25 keyword search plus vector search in Postgres (pgvector), merged
-  with Reciprocal Rank Fusion.
-- **Study flashcards**: question-and-answer cards made from the paper, each linked to its page.
-  Flip a card to see the answer, mark it "I knew it" or "Still learning", then review only the
-  ones you're still learning. Keyboard shortcuts: <kbd>Space</kbd> flips, <kbd>←</kbd>/<kbd>→</kbd>
-  move, <kbd>1</kbd>/<kbd>2</kbd> mark the card.
-- **Conversation history**: each paper keeps any number of conversations. "New conversation"
-  starts a fresh one without deleting anything; earlier ones can be reopened or deleted (with undo)
-  from the history list.
-- **Answer styles**: Standard, Simple (plain-language explanations) and Reviewer (critical
-  peer-review tone).
-- **Multi-user**: email and password accounts, server-side sessions in an HttpOnly cookie, and
-  every paper scoped to its owner.
-- **Reader UI**: section outline, collapsible sections, select any text to have it explained,
-  citation previews on hover, streaming answers, dark mode and drag-and-drop upload.
+### Core features (from the brief)
+
+| Requirement | How PaperLens does it |
+| --- | --- |
+| **Upload a research paper (PDF)** | Click **Upload a paper** or drag a PDF onto the page. The file is checked first: it must be a real PDF (the server checks the file's contents, not only its name), 25 MB or smaller, not password-protected, and not a scanned image. |
+| **Structured summary on upload** | Written automatically as soon as the upload finishes. It has **Title & Authors, Abstract, Problem statement, Methodology, Key results and Conclusion**. |
+| **Readable summary** | Each section has its own heading. A one-sentence "In short" box sits at the top, and a contents list lets you jump between sections. |
+| **Question-answering chatbot (RAG)** | Ask questions in plain language. PaperLens finds the most relevant passages in the paper and the LLM answers **only from those passages**. |
+
+### Extra features ⭐
+
+**Trust and accuracy**
+- ⭐ **Page citations everywhere.** Every summary section and every answer shows page marks
+  such as `p.3`. Click one to open the PDF at that page, or hover it to preview the exact passage.
+- ⭐ **Limitations and future work** as an extra summary section, plus **keywords**.
+- ⭐ **Hybrid search.** Keyword search (BM25) and meaning-based vector search (pgvector),
+  merged with Reciprocal Rank Fusion. Questions find the right passage even when they use
+  different words from the paper.
+- ⭐ **Long papers** are summarised in parts first (map-reduce), so papers of any length work.
+- ⭐ **Formulas** in answers are drawn as real maths (KaTeX).
+
+**Studying**
+- ⭐ **Flashcards.** 12 question-and-answer cards made from the paper, each linked to its page.
+  Flip, mark "I knew it" or "Still learning", shuffle, and review only the cards you're still
+  learning. Keyboard: <kbd>Space</kbd> flips, <kbd>←</kbd>/<kbd>→</kbd> move,
+  <kbd>1</kbd>/<kbd>2</kbd> mark.
+- ⭐ **Three answer styles.** Standard, Simple (plain language for beginners) and Reviewer (a
+  critical peer-review tone).
+- ⭐ **Suggested questions** written for each paper, so you know where to start.
+- ⭐ **Explain a selection.** Select any text in the summary to have it explained or to ask
+  about it.
+- ⭐ **Export the summary** as a Markdown file.
+
+**Conversations**
+- ⭐ **Conversation history.** Each paper keeps any number of conversations. Start a new one
+  without losing the old ones, and reopen or delete (with undo) earlier ones.
+- ⭐ **Streaming answers.** Answers appear word by word, and you can stop one halfway.
+
+**Accounts**
+- ⭐ **Multiple users.** Email and password accounts with a private library each. Passwords are
+  hashed, sessions use an HttpOnly cookie, sign-in attempts are rate-limited, and no one can
+  open another user's papers.
+
+**Layout**
+- ⭐ **Adjustable workspace.** Drag to resize the library and chat panels, fold the library
+  into a slim icon bar, close and reopen the chat, and switch the chat or flashcards to full
+  screen.
+- ⭐ **Built-in PDF viewer** with page jumps, a **dark mode**, drag-and-drop upload, and a
+  layout that adapts to phones and tablets.
+
+**Reliability**
+- ⭐ **Model fallback.** If the Gemini model is busy or slow, PaperLens retries and then
+  switches to a backup model automatically.
+- ⭐ **Saved results.** Summaries and flashcards are generated once and saved, so reopening a
+  paper is instant.
+- ⭐ **Automated tests** with pytest, which need no API key.
+
+## Screenshots
+
+| | |
+| --- | --- |
+| ![Home screen with the upload area and library](docs/screenshots/home.png) **Home:** upload a paper and see your library | ![Reading your paper progress screen](docs/screenshots/processing.png) **Processing:** progress steps with a timer |
+| ![Chat answer with page citations and a passage preview](docs/screenshots/chat.png) **Ask the paper:** answers cite pages, hover to preview | ![Full-screen chat with the conversation history sidebar](docs/screenshots/history.png) **Full-screen chat** with conversation history |
+| ![Flashcard showing its answer](docs/screenshots/flashcards.png) **Flashcards** made from the paper | ![PDF viewer opened at a cited page](docs/screenshots/pdf.png) **PDF viewer** opened at the cited page |
 
 ## Tech stack
 
 | Part | Technology |
 | --- | --- |
+| Frontend | React 19, Vite 6, react-markdown, KaTeX, lucide-react icons |
 | Backend | Python, FastAPI, SQLAlchemy 2 |
-| Database | PostgreSQL 17 with the pgvector extension (Docker) |
+| Database | PostgreSQL 17 with the pgvector extension (runs in Docker) |
 | PDF parsing | PyMuPDF |
-| Embeddings | fastembed, `BAAI/bge-small-en-v1.5` (runs locally on the CPU, no API key) |
+| Embeddings | fastembed with `BAAI/bge-small-en-v1.5` (runs locally on the CPU, no API key needed) |
 | LLM | Google Gemini (default) or any OpenAI-compatible API |
-| Frontend | React 19, Vite |
 | Tests | pytest |
 
 ## Prerequisites
 
-- **Python 3.11+**
-- **Node.js 18+** and npm
-- **Docker Desktop** (for the Postgres database)
-- A **Gemini API key** (free at <https://aistudio.google.com/apikey>), or a key for an
-  OpenAI-compatible provider
+| Tool | Version | Notes |
+| --- | --- | --- |
+| **Python** | 3.11 or newer | Tested with 3.12 |
+| **Node.js** | 18 or newer, with npm | Tested with Node 24 |
+| **Docker Desktop** | any recent version | Runs the Postgres database |
+| **Git** | any | To clone the repository |
+| **Gemini API key** | | Free at <https://aistudio.google.com/apikey> (or a key for an OpenAI-compatible provider) |
 
 ## Setup
+
+You'll need **two terminals**: one for the backend and one for the frontend.
 
 ### 1. Clone the repository
 
@@ -69,7 +122,7 @@ docker compose up -d
 This starts Postgres with pgvector on **localhost:5433** (5433, not 5432, so it doesn't clash with
 a Postgres you may already have installed). Data is kept in a Docker volume between restarts.
 
-### 3. Set up the backend
+### 3. Set up the backend (terminal 1)
 
 ```bash
 cd backend
@@ -107,9 +160,7 @@ uvicorn app.main:app --reload
 The API runs at <http://localhost:8000>. Interactive API docs are at <http://localhost:8000/docs>.
 The database tables are created automatically on first start.
 
-### 4. Set up the frontend
-
-In a second terminal:
+### 4. Set up the frontend (terminal 2)
 
 ```bash
 cd frontend
@@ -119,18 +170,41 @@ npm run dev
 
 Open <http://localhost:5173>. In development, Vite forwards `/api` requests to the backend.
 
-## Trying it out
+## How to use
 
 1. Open <http://localhost:5173> and choose **Create account**.
-2. Upload a research paper (a text-based PDF up to 25 MB). The first upload also downloads the
-   small embedding model, so it takes a little longer.
-3. Read the summary. Click a yellow page mark such as `p.3` to open the PDF at that page.
-4. Ask a question in the **Ask the paper** panel, or click one of the suggested questions.
-   Hover a page mark in the answer to preview the passage it came from.
-5. Open the **Flashcards** tab to test yourself on the paper. Flip each card, mark it, and at the
-   end review only the cards you're still learning.
-6. To check that users are isolated, sign out, create a second account and confirm the library
+2. **Upload a paper.** Click **Upload a paper** or drag a text-based PDF (up to 25 MB) onto the
+   page. A progress screen shows each step. The first upload also downloads the small embedding
+   model, so it takes a little longer.
+3. **Read the summary.** Use the contents list to jump between sections. Click a yellow page mark
+   such as `p.3` to open the PDF at that page.
+4. **Ask questions** in the **Ask the paper** panel, or click a suggested question. Pick an
+   answer style (Standard, Simple or Reviewer) under the box. Hover a page mark in an answer to
+   preview the passage it came from.
+5. **Keep several conversations.** Click the pen icon for a new conversation and the clock icon to
+   see earlier ones. The expand icon opens the chat in full screen, with the history on the left.
+6. **Study with flashcards.** Open the **Flashcards** tab, flip each card and mark it. At the end,
+   review only the cards you're still learning.
+7. **Check that users are separate.** Sign out, create a second account and confirm its library
    is empty.
+
+## AI tools used
+
+**Inside the app**
+- **Google Gemini** (`gemini-3.5-flash-lite`, with `gemini-3.5-flash` as a backup) writes the
+  summaries, the flashcards and the chat answers.
+- **fastembed** (`BAAI/bge-small-en-v1.5`) turns passages into vectors for meaning-based search.
+  It runs locally.
+
+**During development**
+
+I used Claude Code as my coding assistant throughout this project. It helped me generate code for the backend (PDF parsing, summary generation and the RAG chat) and the React frontend, which I then reviewed, tested and adjusted. I also used it to find and fix bugs, to explain parts of the code I didn't understand, such as how the paper is split into chunks and how hybrid search works, and to help write the tests and this README.
+
+I decided which features to build. The flashcards, the resizable layout, the close button for the chat and folding the library when a PDF opens all came from problems I noticed while using the app. When the chat answers were too slow for a demo, I compared different Gemini models with Claude Code and then applied the speed fixes step by step.
+
+I tested every change in the browser and reviewed the code before committing. Some AI suggestions caused errors, such as an indentation error in `main.py`, and I fixed them through testing. Testing the setup on a fresh copy also found a bug in `requirements.txt` that would have stopped anyone from installing the app.
+
+Through this project, I learned how RAG works in practice: splitting a document into chunks, turning them into embeddings, and searching them to give the LLM the right context to answer questions.
 
 ## Running the tests
 
@@ -145,10 +219,34 @@ python -m pytest
 
 (`python -m pytest` also works from the project root.)
 
-They cover sign-up and sign-in, session handling, login throttling, user isolation on every paper
-route, upload, chat retrieval, conversations (separate histories, deletion, privacy and moving
-chats saved before conversations existed), summary and flashcard caching, deletion and retrieval
-ranking.
+They cover:
+- sign-up, sign-in, sessions and login throttling
+- user isolation on every paper route
+- upload and chat retrieval
+- conversations: separate histories, deletion, privacy, and moving chats saved before
+  conversations existed
+- caching of summaries and flashcards
+- reading summaries that the model returns in a slightly different shape, and asking again when
+  sections come back empty
+- deletion and retrieval ranking
+
+## How it works
+
+```
+Upload:    PDF ─► page text ─► chunks (never cross pages) ─► embeddings ─► Postgres
+Summary:   page text with [Page N] markers ─► LLM (JSON) ─► checked ─► saved on the paper
+Cards:     page text with [Page N] markers ─► LLM (JSON) ─► 12 cards with pages ─► saved on the paper
+Question:  question ─► BM25 + pgvector search ─► top 6 passages ─► LLM ─► streamed answer with [n] citations
+```
+
+- **Why chunks never cross pages:** each passage belongs to exactly one page, so every citation
+  points to the right page.
+- **Why hybrid search:** keyword search finds exact terms such as "WER" or dataset names. Vector
+  search finds passages with the same meaning but different words. Combining the two works better
+  than either one alone.
+- **Why the answers stay grounded:** the LLM is told to answer only from the numbered passages it
+  is given and to cite them. The page numbers in a summary are checked, and any page the paper
+  doesn't have is removed.
 
 ## Configuration
 
@@ -168,15 +266,6 @@ All settings live in `backend/.env` (see `backend/.env.example`).
 | `CHUNK_SIZE` / `CHUNK_OVERLAP` | `1200` / `200` | Chunk length and overlap in characters |
 | `TOP_K` | `6` | Passages retrieved per question |
 | `MAX_UPLOAD_MB` | `25` | Largest PDF accepted |
-
-## How it works
-
-```
-Upload:   PDF ─► page text ─► chunks (never cross pages) ─► embeddings ─► Postgres
-Summary:  page text with [Page N] markers ─► LLM (JSON) ─► saved on the paper
-Cards:    page text with [Page N] markers ─► LLM (JSON) ─► 12 cards with pages ─► saved on the paper
-Question: question ─► BM25 + pgvector search ─► top 6 passages ─► LLM ─► streamed answer with [n] citations
-```
 
 ## Project structure
 
@@ -198,11 +287,12 @@ paperlens/
 │   │   ├── llm.py            Gemini / OpenAI client with fallback
 │   │   └── config.py         settings
 │   └── tests/
+├── docs/screenshots/         images used in this README
 └── frontend/
     └── src/
-        ├── App.jsx           app shell and sign-in gate
+        ├── App.jsx           app shell, layout and sign-in gate
         ├── api.js            API client
-        └── components/       reader, chat, sidebar, sign-in, ...
+        └── components/       reader, chat, flashcards, sidebar, sign-in, ...
 ```
 
 ## API overview
@@ -223,3 +313,13 @@ paperlens/
 
 Every `/api/documents` route requires a signed-in user and returns 404 for papers owned by
 someone else.
+
+## Known limitations
+
+- **Scanned PDFs** (images of pages) are rejected, because they contain no text to read. Running
+  OCR on them first would fix this.
+- **Figures and tables** are read only as text. Charts and images are not analysed.
+- Answers can only be as good as the passages found. A very general question ("summarise
+  everything") works better on the Summary tab than in the chat.
+- The app runs locally. Putting it online would need a hosted Postgres with pgvector, and
+  `COOKIE_SECURE=true` behind HTTPS.

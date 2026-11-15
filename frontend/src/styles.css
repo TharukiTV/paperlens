@@ -129,13 +129,16 @@ kbd { font: 600 .72rem var(--sans); padding: .05rem .35rem; border: 1px solid va
   background: var(--tooltip-bg); color: var(--tooltip-ink); box-shadow: var(--shadow-l);
   font: 400 .8rem/1.45 var(--sans); text-align: left;
   display: grid; gap: .3rem;
-  opacity: 0; visibility: hidden; transform: translate(-50%, 4px); transition: opacity .15s, transform .15s, visibility .15s;
+  opacity: 0; visibility: hidden; transform: translate(calc(-50% + var(--peek-shift, 0px)), 4px); transition: opacity .15s, transform .15s, visibility .15s;
   pointer-events: none;
 }
-.peek::after { content: ""; position: absolute; top: 100%; left: 50%; margin-left: -6px; border: 6px solid transparent; border-top-color: var(--tooltip-bg); }
+/* the arrow stays above the mark even when the box slides sideways to fit the panel */
+.peek::after { content: ""; position: absolute; top: 100%; left: calc(50% - var(--peek-shift, 0px)); margin-left: -6px; border: 6px solid transparent; border-top-color: var(--tooltip-bg); }
+.peek-below .peek { bottom: auto; top: calc(100% + 8px); }
+.peek-below .peek::after { top: auto; bottom: 100%; border-top-color: transparent; border-bottom-color: var(--tooltip-bg); }
 .peek__head { font-weight: 600; font-size: .72rem; letter-spacing: .04em; text-transform: uppercase; opacity: .7; }
 .peek__foot { font-size: .72rem; opacity: .6; }
-.page-ref-wrap:hover .peek, .page-ref-wrap:focus-within .peek { opacity: 1; visibility: visible; transform: translate(-50%, 0); }
+.page-ref-wrap:hover .peek, .page-ref-wrap:focus-within .peek { opacity: 1; visibility: visible; transform: translate(calc(-50% + var(--peek-shift, 0px)), 0); }
 
 /* ---------- sidebar ---------- */
 .sidebar {

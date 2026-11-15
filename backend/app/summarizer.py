@@ -57,6 +57,35 @@ def _windows(marked_pages: list[str], max_chars: int) -> list[str]:
     return windows
 
 
+# Other names the model sometimes uses for a section, after lower-casing and turning spaces into "_".
+_ALIASES = {
+    "problem": "problem_statement", "research_problem": "problem_statement",
+    "method": "methodology", "methods": "methodology", "approach": "methodology",
+    "results": "key_results", "findings": "key_results", "key_findings": "key_results",
+    "conclusions": "conclusion",
+    "limitations_and_future_work": "limitations", "future_work": "limitations",
+}
+
+
+def _find_sections(raw: dict) -> dict:
+    """The model usually returns the sections at the top level, but sometimes nests them under "sections"
+    or writes "Key Results" instead of "key_results". Accept all of those."""
+    candidates = dict(raw)
+    if isinstance(raw.get("sections"), dict):
+        candidates.update(raw["sections"])
+    found = {}
+    for name, value in candidates.items():
+        key = str(name).strip().lower().replace(" ", "_").replace("-", "_").replace("&", "and")
+        key = _ALIASES.get(key, key)
+        if key in SECTIONS and value and key not in found:
+            found[key] = value
+    return found
+
+
+def _missing_sections(summary: dict) -> int:
+    return sum(1 for key in SECTIONS[1:5] if not summary["sections"][key]["content"])
+
+
 def _normalize(raw: dict, page_count: int) -> dict:
     def pages(value) -> list[int]:
         out = []
@@ -82,11 +111,12 @@ def _normalize(raw: dict, page_count: int) -> dict:
         "suggested_questions": str_list(raw.get("suggested_questions"))[:5],
         "sections": {},
     }
+    found = _find_sections(raw)
     for key in SECTIONS:
-        value = raw.get(key) or {}
-        if isinstance(value, str):
+        value = found.get(key) or {}
+        if isinstance(value, (str, list)):
             value = {"content": value, "pages": []}
-        content = value.get("content", "")
+        content = next((value[k] for k in ("content", "text", "summary") if value.get(k)), "")
         if isinstance(content, list):
             content = "\n".join(f"- {c}" for c in content)
         summary["sections"][key] = {"content": str(content).strip(), "pages": pages(value.get("pages"))}
@@ -118,8 +148,17 @@ def generate_summary(pages: list[str], max_chars: int, hint: dict | None = None)
                   f"followed by research notes covering the whole paper (page refs like (p.4)).\n\n"
                   f"FIRST PAGE:\n{opening}\n\nNOTES:\n" + "\n\n".join(notes))
 
-    raw = parse_json(llm.complete(SYSTEM, [{"role": "user", "content": prompt}], temperature=0.1, json_mode=True))
-    summary = _normalize(raw, len(pages))
+    def ask() -> dict:
+        raw = parse_json(llm.complete(SYSTEM, [{"role": "user", "content": prompt}], temperature=0.1, json_mode=True))
+        return _normalize(raw, len(pages))
+
+    summary = ask()
+    # Now and then the model leaves most sections empty. One more try almost always fixes it.
+    if _missing_sections(summary) >= 2:
+        log.warning("Summary came back with %d empty core sections; asking again", _missing_sections(summary))
+        retry = ask()
+        if _missing_sections(retry) < _missing_sections(summary):
+            summary = retry
     summary["generated_at"] = datetime.now(timezone.utc).isoformat()
     summary["model"] = getattr(llm, "last_model", None) or model_label()
     summary["strategy"] = strategy
