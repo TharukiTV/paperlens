@@ -178,8 +178,7 @@ Open <http://localhost:5173>. In development, Vite forwards `/api` requests to t
 
 1. Open <http://localhost:5173> and choose **Create account**.
 2. **Upload a paper.** Click **Upload a paper** or drag a text-based PDF (up to 25 MB) onto the
-   page. A progress screen shows each step. The first upload also downloads the small embedding
-   model, so it takes a little longer.
+   page. A progress screen shows each step.
 3. **Read the summary.** Use the contents list to jump between sections. Click a yellow page mark
    such as `p.3` to open the PDF at that page.
 4. **Ask questions** in the **Ask the paper** panel, or click a suggested question. Pick an
