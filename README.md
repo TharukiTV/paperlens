@@ -202,11 +202,11 @@ Open <http://localhost:5173>. In development, Vite forwards `/api` requests to t
 
 **During development**
 
-I used Claude Code as my coding assistant throughout this project. It helped me generate code for the backend (PDF parsing, summary generation and the RAG chat) and the React frontend, which I then reviewed, tested and adjusted. I also used it to find and fix bugs, to explain parts of the code I didn't understand, such as how the paper is split into chunks and how hybrid search works, and to help write the tests and this README.
+I used Claude Code as my coding assistant throughout this project. It helped me generate code, which I then reviewed, tested and adjusted. I also used it to find and fix bugs, to explain parts of the code I didn't understand.
 
 I decided which features to build. The flashcards, the resizable layout, the close button for the chat and folding the library when a PDF opens all came from problems I noticed while using the app. When the chat answers were too slow for a demo, I compared different Gemini models with Claude Code and then applied the speed fixes step by step.
 
-I tested every change in the browser and reviewed the code before committing. Some AI suggestions caused errors, such as an indentation error in `main.py`, and I fixed them through testing. Testing the setup on a fresh copy also found a bug in `requirements.txt` that would have stopped anyone from installing the app.
+I tested every change in the browser and reviewed the code before committing. Some AI suggestions caused errors, I fixed them through testing.
 
 Through this project, I learned how RAG works in practice: splitting a document into chunks, turning them into embeddings, and searching them to give the LLM the right context to answer questions.
 
