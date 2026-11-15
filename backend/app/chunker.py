@@ -7,9 +7,10 @@ _SENTENCE_END = re.compile(r"(?<=[.!?])\s+")
 
 @dataclass
 class Chunk:
-    id: int
-    page: int     # 1-based page number
-    text: str
+    id: int       # 0, 1, 2, 3 ... its position in the paper
+    page: int     # which page it came from (1, 2, 3 ...)
+    text: str     # the actual words
+
 
     def to_dict(self) -> dict:
         return asdict(self)

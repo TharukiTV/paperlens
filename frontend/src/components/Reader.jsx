@@ -316,12 +316,14 @@ export default function Reader({ doc, view, setView, pdfPage, onOpenPage, summar
   }, [view, doc.id]);
 
   useEffect(() => { scrollRef.current?.scrollTo({ top: 0 }); }, [doc.id]);
+  // The PDF tab always uses the one-line header, so the viewer gets as much height as possible.
+  const headCompact = compact || view === "pdf";
   useEffect(() => { if (view === "cards") setCardsDoc(doc.id); }, [view, doc.id]);
 
   return (
     <div className="reader">
-      <header className={`reader__head ${compact ? "is-compact" : ""}`}>
-        <h1 className="reader__title" title={compact ? s?.title || doc.title : undefined}>{s?.title || doc.title}</h1>
+      <header className={`reader__head ${headCompact ? "is-compact" : ""}`}>
+        <h1 className="reader__title" title={headCompact ? s?.title || doc.title : undefined}>{s?.title || doc.title}</h1>
         {s?.authors?.length > 0 && <p className="reader__authors">{s.authors.join(", ")}</p>}
         <p className="reader__meta">
           <span>{doc.filename}</span>

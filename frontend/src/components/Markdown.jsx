@@ -1,6 +1,15 @@
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import remarkMath from "remark-math";
+import rehypeKatex from "rehype-katex";
+import "katex/dist/katex.min.css";
 import PageRef from "./PageRef";
+
+// Formulas written as $...$ or $$...$$ are drawn with KaTeX. A formula it can't parse is shown as plain text, never an error.
+const KATEX = { throwOnError: false, strict: false };
+// "$5 and $10" is money, not a formula: escape a $ that starts a plain number ("$2^n$" and "$5$" are still maths).
+const CURRENCY = /(^|[\s(])\$(?=\d[\d,.]*(?:\s?(?:[kKmMbB]|million|billion|thousand))?(?:[\s.,;:!?)]|$))/g;
+const escapeCurrency = (text) => text.replace(CURRENCY, "$1\\$");
 
 // Turn "[3]" citations into links we can render as page marks. Skip real links like [3](url).
 const CITE = /\[(\d{1,2})\](?!\()/g;
@@ -16,11 +25,13 @@ function tidyCitations(text) {
 }
 
 export default function Markdown({ text, sources = [], onOpenPage }) {
-  const prepared = sources.length ? tidyCitations(text).replace(CITE, (m, n) => `[${n}](#cite-${n})`) : text;
+  const cleaned = escapeCurrency(text);
+  const prepared = sources.length ? tidyCitations(cleaned).replace(CITE, (m, n) => `[${n}](#cite-${n})`) : cleaned;
   return (
     <div className="prose">
       <ReactMarkdown
-        remarkPlugins={[remarkGfm]}
+        remarkPlugins={[remarkGfm, remarkMath]}
+        rehypePlugins={[[rehypeKatex, KATEX]]}
         components={{
           a({ href = "", children }) {
             if (href.startsWith("#cite-")) {

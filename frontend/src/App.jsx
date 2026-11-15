@@ -185,9 +185,9 @@ function Workspace({ user, onSignOut }) {
   useEffect(() => {
     let depth = 0;
     const hasFiles = (e) => Array.from(e.dataTransfer?.types || []).includes("Files");
-    const enter = (e) => { if (!hasFiles(e)) return; e.preventDefault(); depth += 1; setDragging(true); };
-    const over = (e) => { if (hasFiles(e)) e.preventDefault(); };
-    const leave = (e) => { if (!hasFiles(e)) return; depth = Math.max(0, depth - 1); if (!depth) setDragging(false); };
+    const enter = (e) => {if (!hasFiles(e)) return; e.preventDefault(); depth += 1; setDragging(true); };
+    const over = (e) => {if (hasFiles(e)) e.preventDefault(); };
+    const leave = (e) => {if (!hasFiles(e)) return; depth = Math.max(0, depth - 1); if (!depth) setDragging(false); };
     const drop = (e) => {
       if (!hasFiles(e)) return;
       e.preventDefault();

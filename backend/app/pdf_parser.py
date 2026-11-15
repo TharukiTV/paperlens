@@ -25,10 +25,10 @@ class ParsedPDF:
 
 def _clean(text: str) -> str:
     text = text.replace("\u00ad", "")                      # soft hyphens
-    text = re.sub(r"(\w)-\n(\w)", r"\1\2", text)          # re-join hyphenated line breaks
-    text = re.sub(r"[ \t]+", " ", text)
-    text = re.sub(r"\n{3,}", "\n\n", text)
-    return text.strip()
+    text = re.sub(r"(\w)-\n(\w)", r"\1\2", text)         # "infor-\nmation" → "information" # re-join hyphenated line breaks
+    text = re.sub(r"[ \t]+", " ", text) # many spaces → one space
+    text = re.sub(r"\n{3,}", "\n\n", text)    # many blank lines → one blank line
+    return text.strip()  
 
 
 def parse_pdf(data: bytes) -> ParsedPDF:

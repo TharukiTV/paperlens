@@ -104,15 +104,15 @@ def upload_document(file: UploadFile = File(...), user: User = Depends(auth.curr
     except PDFError as exc:
         raise HTTPException(422, str(exc)) from exc
 
-    chunks = [c.to_dict() for c in chunk_pages(parsed.pages, settings.chunk_size, settings.chunk_overlap)]
-    embeddings = Embedder.embed_passages([c["text"] for c in chunks])
+    chunks = [c.to_dict() for c in chunk_pages(parsed.pages, settings.chunk_size, settings.chunk_overlap)]   #cut
+    embeddings = Embedder.embed_passages([c["text"] for c in chunks]) #turn in to numbers
 
     meta_title = parsed.metadata.get("title", "")
     title = meta_title if 10 < len(meta_title) < 300 else Path(name).stem.replace("_", " ")
     record = store.create_document(
-        db, user.id, data, name,
+        db, user.id, data, name,               
         {"title": title, "pages": parsed.page_count, "chunks": len(chunks),
-         "words": len(parsed.full_text.split()), "pdf_metadata": parsed.metadata},
+         "words": len(parsed.full_text.split()), "pdf_metadata": parsed.metadata},                       #save
         chunks, embeddings,
     )
     log.info("User %s indexed %s: %d pages, %d chunks (%s)", user.id, name, parsed.page_count, len(chunks), record["retrieval"])

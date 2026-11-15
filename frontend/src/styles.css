@@ -354,7 +354,9 @@ kbd { font: 600 .72rem var(--sans); padding: .05rem .35rem; border: 1px solid va
 .pdf__jump input { width: 4rem; padding: .3rem .4rem; border: 1px solid var(--rule); border-radius: 6px; background: var(--surface-2); text-align: center; font-variant-numeric: tabular-nums; }
 .pdf__jump input:focus { outline: 0; border-color: var(--accent); }
 .pdf__open { margin-left: auto; font-size: .88rem; padding: .4rem .7rem; }
-.pdf-frame { flex: 1; width: 100%; min-height: 70vh; border: 0; background: var(--surface-3); }
+/* The PDF fills exactly the space under the header and scrolls inside its own viewer; the page around it never scrolls. */
+.reader__body:has(> .pdf) { overflow: hidden; }
+.pdf-frame { flex: 1; width: 100%; min-height: 0; border: 0; background: var(--surface-3); }
 
 /* ---------- prose (markdown) ---------- */
 .prose > :first-child { margin-top: 0; }
@@ -362,6 +364,9 @@ kbd { font: 600 .72rem var(--sans); padding: .05rem .35rem; border: 1px solid va
 .prose p, .prose ul, .prose ol { margin: 0 0 .75em; }
 .prose ul, .prose ol { padding-left: 1.3em; }
 .prose li { margin-bottom: .3em; }
+/* formulas (KaTeX): a long one scrolls sideways inside the answer instead of overflowing it */
+.prose .katex { font-size: 1.05em; }
+.prose .katex-display { margin: .5em 0; padding: .25em 0; overflow-x: auto; overflow-y: hidden; }
 .prose h1, .prose h2, .prose h3 { font: 600 1rem/1.3 var(--sans); margin: 1.1em 0 .4em; }
 .prose a { color: var(--accent); }
 .prose strong { font-weight: 600; }
